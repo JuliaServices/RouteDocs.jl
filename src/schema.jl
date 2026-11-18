@@ -246,7 +246,8 @@ function example_value(s::Dict{String,Any}; refs = nothing, depth::Int = 0)
     haskey(s, "enum") && return first(s["enum"])
     t = get(s, "type", nothing)
     t isa Vector && (t = first(filter(!=("null"), t)))
-    t == "string" && return get(Dict("date" => "2026-11-07", "date-time" => "2026-11-07T18:30:00Z"),
+    t == "string" && return get(Dict("date" => "2026-11-07", "date-time" => "2026-11-07T18:30:00Z",
+                                     "uuid" => "123e4567-e89b-42d3-a456-426614174000"),
                                 get(s, "format", ""), "string")
     t == "integer" && return 0
     t == "number" && return 0

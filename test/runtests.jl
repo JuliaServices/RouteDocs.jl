@@ -190,6 +190,7 @@ end
     @test RouteDocs.path_param_names("/v1/users/{userId}/items/{item_id2}") == ["userId", "item_id2"]
     @test RouteDocs.ordered(Dict(:count => 1, :name => "a")) == Dict("count" => 1, "name" => "a")
     @test RouteDocs.schema(Base.UUID) == Dict("type" => "string", "format" => "uuid")
+    @test Base.UUID(RouteDocs.example_value(RouteDocs.schema(Base.UUID))) isa Base.UUID
     @test Set(s["type"] for s in RouteDocs.schema(Union{Int,Missing})["anyOf"]) == Set(["integer", "null"])
     pair = RouteDocs.schema(Tuple{Int,String})
     @test pair["minItems"] == 2 && pair["maxItems"] == 2
