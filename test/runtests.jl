@@ -238,6 +238,15 @@ end
     doc = RouteDocs.openapi([named]; title = "Notes API", version = "1")
     @test doc["paths"]["/v1/notes/named"]["post"]["requestBody"]["content"]["application/json"]["schema"]["required"] == ["name"]
 
+    optional = scratch_endpoint("PUT /v1/notes/{note_id}/text"; body = Union{Nothing,Example.CreateNoteRequest},
+        fields = (text = (minLength = 3,),), mcp = RouteDocs.excluded("Only for the web app."))
+    doc = RouteDocs.openapi([optional]; title = "Notes API", version = "1")
+    @test doc["paths"]["/v1/notes/{note_id}/text"]["put"]["requestBody"]["content"]["application/json"]["schema"]["properties"]["text"]["minLength"] == 3
+    @test !any(i -> occursin("not an object", i), RouteDocs.problems(; routes = Set([("PUT", "/v1/notes/{note_id}/text")]), endpoints = [optional]))
+    quiet = scratch_endpoint("DELETE /v1/other/{note_id}"; response = Other.Note, status = 204, mcp = RouteDocs.excluded("Only for the web app."))
+    @test !any(i -> occursin("schema name Note", i), RouteDocs.problems(; routes = Set([("DELETE", "/v1/other/{note_id}"), ROUTES...]),
+        widgets = WIDGETS, verbs = VERBS, endpoints = [RouteDocs.ENDPOINTS; quiet]))
+
     maybe = scratch_endpoint("GET /v1/notes/maybe"; response = Union{Example.Note,Nothing}, mcp = RouteDocs.excluded("Only for the web app."))
     @test isempty(RouteDocs.contract_problems(; bodies = [], query_params = [],
         responses = [("GET", "/v1/notes/maybe", Nothing), ("GET", "/v1/notes/maybe", Example.Note)], endpoints = [maybe]))

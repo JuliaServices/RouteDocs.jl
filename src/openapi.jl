@@ -105,7 +105,7 @@ function openapi(endpoints::Vector{Endpoint} = ENDPOINTS; title::AbstractString,
                 req = Set{String}(get(inline, "required", String[]))
                 union!(req, e.required)
                 isempty(req) || (inline["required"] = sort!(collect(req)))
-                if is_object_struct(e.body)
+                if haskey(inline, "properties")
                     for (name, extra) in e.fields
                         inline["properties"][name] = with_fields(inline["properties"][name], extra)
                     end
