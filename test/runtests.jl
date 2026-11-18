@@ -227,6 +227,9 @@ end
     pair_only = scratch_endpoint("GET /v1/notes/pair"; response = Tuple{Integer}, mcp = RouteDocs.excluded("Only for the web app."))
     @test length(RouteDocs.contract_problems(; bodies = [], query_params = [],
         responses = [("GET", "/v1/notes/pair", Tuple{Bool})], endpoints = [pair_only])) == 1
+    loose = scratch_endpoint("GET /v1/notes/loose"; response = Vector, mcp = RouteDocs.excluded("Only for the web app."))
+    @test isempty(RouteDocs.contract_problems(; bodies = [], query_params = [],
+        responses = [("GET", "/v1/notes/loose", Vector{Int})], endpoints = [loose]))
     anything = scratch_endpoint("POST /v1/notes/anything"; body = Any, response = Real, mcp = RouteDocs.excluded("Only for the web app."))
     @test isempty(RouteDocs.contract_problems(; query_params = [], endpoints = [anything],
         bodies = [("POST", "/v1/notes/anything", Int)], responses = [("POST", "/v1/notes/anything", Float64)]))

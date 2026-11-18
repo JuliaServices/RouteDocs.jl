@@ -258,15 +258,17 @@ function contract_problems(; bodies, responses, query_params,
 end
 
 """
-Whether a value of type `T` fits documented type `D` in JSON: `D` is `T` or
-`Any`, `T` fits one member of a documented union, the two have the same JSON
-shape, or `D` is a number and `T` an integer.
+Whether a value of type `T` fits documented type `D` in JSON: `D` is `T`, `T`
+fits one member of a documented union, `D`'s schema allows any value (`Any`, an
+untyped `Vector`), the two have the same JSON shape, or `D` is a number and `T`
+an integer. Anything else must match exactly, so document the concrete type a
+route parses or returns.
 """
 function admits(@nospecialize(D), @nospecialize(T))
-    (D === T || D === Any) && return true
+    D === T && return true
     D isa Union && any(m -> admits(m, T), Base.uniontypes(D)) && return true
     d, t = json_shape(D), json_shape(T)
-    return d == t || (d == Dict{String,Any}("type" => "number") && t == Dict{String,Any}("type" => "integer"))
+    return isempty(d) || d == t || (d == Dict{String,Any}("type" => "number") && t == Dict{String,Any}("type" => "integer"))
 end
 
 """
