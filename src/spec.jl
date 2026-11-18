@@ -166,12 +166,14 @@ Keywords:
 - `returns`: what the response contains.
 - `query`: a vector of [`param`](@ref)s.
 - `body`: the request struct parsed by the handler. Its field docstrings are the
-  field documentation. `body_required = false` when the body may be omitted.
+  field documentation. `body_required = false` when the body may be omitted. A
+  body that is not a struct, such as a list, is one MCP tool argument named
+  `body`, which has no description, so [`problems`](@ref) reports it: give a
+  tool a struct body.
 - `required`: body fields the handler rejects when missing or blank, beyond the
   fields that have no default.
 - `fields`: JSON Schema keywords added to a body field, for example
-  `(status = (enum = ["open", "closed"],),)`. For a body that is not an object,
-  such as a list, `body = (...)` adds them to the whole body.
+  `(status = (enum = ["open", "closed"],),)`.
 - `response`: the Julia type serialized as the response, when there is one.
 - `status`: the success status (200, 201, or 204).
 - `content_type`: the success media type when it is not JSON.

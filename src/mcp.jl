@@ -80,7 +80,7 @@ object is one field named `body`.
 function body_fields(e::Endpoint)
     e.body === nothing && return Tuple{String,Dict{String,Any},Bool}[]
     T = e.body
-    is_object_struct(T) || return [("body", with_fields(schema(T), get(e.fields, "body", nothing)), e.body_required)]
+    is_object_struct(T) || return [("body", schema(T), e.body_required)]
     s = schema(T)
     required = Set{String}(get(s, "required", String[]))
     union!(required, e.required)

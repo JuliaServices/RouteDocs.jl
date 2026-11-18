@@ -196,12 +196,12 @@ end
     @test RouteDocs.example_value(pair) == [0, "string"]
 
     tags = scratch_endpoint("PUT /v1/notes/{note_id}/tags"; body = Set{String},
-        fields = (body = (description = "The note's tags.",),),
         mcp = RouteDocs.tool("set_note_tags"; title = "Set a note's tags"))
     (name, s, required) = only(RouteDocs.body_fields(tags))
-    @test name == "body" && s["uniqueItems"] && s["description"] == "The note's tags." && required
-    @test isempty(RouteDocs.problems(; routes = push!(copy(ROUTES), (tags.method, tags.path)), widgets = WIDGETS,
-                                     verbs = VERBS, endpoints = [RouteDocs.ENDPOINTS; tags]))
+    @test name == "body" && s["uniqueItems"] && required
+    @test RouteDocs.problems(; routes = push!(copy(ROUTES), (tags.method, tags.path)), widgets = WIDGETS,
+                             verbs = VERBS, endpoints = [RouteDocs.ENDPOINTS; tags]) ==
+        ["PUT /v1/notes/{note_id}/tags ($(tags.source)) tool argument body has no description"]
 
     long = scratch_endpoint("POST /v1/notes/long"; body = Example.CreateNoteRequest, required = ["text"],
         fields = (text = (minLength = 3,),),
@@ -242,7 +242,6 @@ end
         fields = (text = (minLength = 3,),), mcp = RouteDocs.excluded("Only for the web app."))
     doc = RouteDocs.openapi([optional]; title = "Notes API", version = "1")
     @test doc["paths"]["/v1/notes/{note_id}/text"]["put"]["requestBody"]["content"]["application/json"]["schema"]["properties"]["text"]["minLength"] == 3
-    @test !any(i -> occursin("not an object", i), RouteDocs.problems(; routes = Set([("PUT", "/v1/notes/{note_id}/text")]), endpoints = [optional]))
     quiet = scratch_endpoint("DELETE /v1/other/{note_id}"; response = Other.Note, status = 204, mcp = RouteDocs.excluded("Only for the web app."))
     @test !any(i -> occursin("schema name Note", i), RouteDocs.problems(; routes = Set([("DELETE", "/v1/other/{note_id}"), ROUTES...]),
         widgets = WIDGETS, verbs = VERBS, endpoints = [RouteDocs.ENDPOINTS; quiet]))

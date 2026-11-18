@@ -55,12 +55,13 @@ nonnothing(T) = T isa Union ? Base.typesplit(T, Nothing) : T
 
 The JSON Schema of a value of Julia type `T` as JSON.jl reads and writes it.
 Struct fields become object properties, under their field names, described by
-their field docstrings; a field without a default is required. `Union{T,Nothing}` accepts `null`.
-A `DateTime` is documented as `format: date-time`, which includes a time zone
-offset, so serialize it with one (JSON.jl writes none by default). With a
-`refs` dictionary, named structs are emitted once under `refs` and referenced as
-`#/components/schemas/Name` (for OpenAPI); without one they are written inline
-(for MCP tool arguments, which many hosts cannot resolve references in).
+their field docstrings; a field without a default is required.
+`Union{T,Nothing}` accepts `null`. A `DateTime` is documented as
+`format: date-time`, which includes a time zone offset, so serialize it with one
+(JSON.jl writes none by default). With a `refs` dictionary, named structs are
+emitted once under `refs` and referenced as `#/components/schemas/Name` (for
+OpenAPI); without one they are written inline (for MCP tool arguments, which
+many hosts cannot resolve references in).
 """
 function schema(@nospecialize(T); refs::Union{Nothing,Dict{String,Any}} = nothing,
                 docs::Bool = true, stack::Vector{Any} = Any[])

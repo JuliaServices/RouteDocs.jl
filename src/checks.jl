@@ -93,11 +93,6 @@ function official_problems(e::Endpoint, where_::String, widgets::Set{Symbol}, ve
     for p in e.query
         isempty(p.description) && push!(out, "$(where_) query parameter $(p.name) needs a description")
     end
-    if e.body !== nothing && !haskey(schema(e.body), "properties")
-        for name in keys(e.fields)
-            name == "body" || push!(out, "$(where_) adds schema keywords to $(name), but its body is not an object; use `body`")
-        end
-    end
     if e.body !== nothing && is_object_struct(e.body)
         names = json_fields(e.body)
         docs = field_docs(e.body)
@@ -147,8 +142,9 @@ end
 
 """
 The struct types each OpenAPI schema name would stand for, from the bodies and
-responses (other than 204 responses, which have no body) of official endpoints. A name is a struct's name without its module
-or type parameters, so two types that share one cannot both be documented.
+responses (other than 204 responses, which have no body) of official
+endpoints. A name is a struct's name without its module or type parameters, so
+two types that share one cannot both be documented.
 """
 function schema_names(endpoints::Vector{Endpoint})
     names = Dict{String,Set{Any}}()
