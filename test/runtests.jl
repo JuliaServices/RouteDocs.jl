@@ -222,6 +222,11 @@ end
     count_only = scratch_endpoint("GET /v1/notes/count"; response = Integer, mcp = RouteDocs.excluded("Only for the web app."))
     @test length(RouteDocs.contract_problems(; bodies = [], query_params = [],
         responses = [("GET", "/v1/notes/count", Bool)], endpoints = [count_only])) == 1
+    @test isempty(RouteDocs.contract_problems(; bodies = [], query_params = [],
+        responses = [("GET", "/v1/notes/count", Int)], endpoints = [count_only]))
+    anything = scratch_endpoint("POST /v1/notes/anything"; body = Any, response = Real, mcp = RouteDocs.excluded("Only for the web app."))
+    @test isempty(RouteDocs.contract_problems(; query_params = [], endpoints = [anything],
+        bodies = [("POST", "/v1/notes/anything", Int)], responses = [("POST", "/v1/notes/anything", Float64)]))
     named = scratch_endpoint("POST /v1/notes/named"; body = Dict{String,String}, required = ["name"],
         mcp = RouteDocs.excluded("Only for the web app."))
     doc = RouteDocs.openapi([named]; title = "Notes API", version = "1")

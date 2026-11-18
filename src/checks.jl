@@ -258,11 +258,17 @@ function contract_problems(; bodies, responses, query_params,
 end
 
 """
-Whether a value of type `T` matches documented type `D` in JSON: the same type,
-the same JSON shape, or one member of a documented union.
+Whether a value of type `T` fits documented type `D` in JSON: `D` is `T` or
+`Any`, `T` fits one member of a documented union, `T` is a subtype of `D`, or
+the two have the same JSON shape. A `Bool` is written as `true` or `false`, so
+it does not fit a documented number type.
 """
-admits(@nospecialize(D), @nospecialize(T)) = D === T || json_shape(D) == json_shape(T) ||
-    (D isa Union && any(m -> m === T || json_shape(m) == json_shape(T), Base.uniontypes(D)))
+function admits(@nospecialize(D), @nospecialize(T))
+    (D === T || D === Any) && return true
+    D isa Union && any(m -> admits(m, T), Base.uniontypes(D)) && return true
+    !(D isa Union) && T <: D && !(T <: Bool) && return true
+    return json_shape(D) == json_shape(T)
+end
 
 """
 The JSON shape of `T` without descriptions or defaults, and with required
