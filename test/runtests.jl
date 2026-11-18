@@ -10,6 +10,22 @@ const VERBS = (RouteDocs.TOOL_VERBS..., "share")
 
 endpoint(method, path) = only(e for e in RouteDocs.ENDPOINTS if e.method == method && e.path == path)
 
+module Other
+using StructUtils
+"Another module's note."
+@kwarg struct Note
+    "Its title."
+    title::String
+end
+end
+
+"Document one more route without keeping it in `ENDPOINTS`."
+function scratch_endpoint(route; kw...)
+    RouteDocs.endpoint(route; summary = "Scratch route", description = "A scratch route.",
+                       access = "Anyone.", returns = "Nothing much.", kw...)
+    return pop!(RouteDocs.ENDPOINTS)
+end
+
 @testset "RouteDocs" begin
 
 @testset "documenting routes" begin
@@ -168,6 +184,43 @@ end
     @test any(i -> occursin("parses a Main.Example.Note body but documents none", i), issues)
     @test any(i -> occursin("returns Main.Example.NoteListResponse but documents response", i), issues)
     @test any(i -> occursin("reads query parameter `page`, which is not documented", i), issues)
+end
+
+@testset "edge cases" begin
+    @test RouteDocs.path_param_names("/v1/users/{userId}/items/{item_id2}") == ["userId", "item_id2"]
+    @test RouteDocs.ordered(Dict(:count => 1, :name => "a")) == Dict("count" => 1, "name" => "a")
+    @test RouteDocs.schema(Base.UUID) == Dict("type" => "string", "format" => "uuid")
+    @test Set(s["type"] for s in RouteDocs.schema(Union{Int,Missing})["anyOf"]) == Set(["integer", "null"])
+    pair = RouteDocs.schema(Tuple{Int,String})
+    @test pair["minItems"] == 2 && pair["maxItems"] == 2
+    @test RouteDocs.example_value(pair) == [0, "string"]
+
+    tags = scratch_endpoint("PUT /v1/notes/{note_id}/tags"; body = Set{String},
+        fields = (body = (description = "The note's tags.",),),
+        mcp = RouteDocs.tool("set_note_tags"; title = "Set a note's tags"))
+    (name, s, required) = only(RouteDocs.body_fields(tags))
+    @test name == "body" && s["uniqueItems"] && s["description"] == "The note's tags." && required
+    @test isempty(RouteDocs.problems(; routes = push!(copy(ROUTES), (tags.method, tags.path)), widgets = WIDGETS,
+                                     verbs = VERBS, endpoints = [RouteDocs.ENDPOINTS; tags]))
+
+    long = scratch_endpoint("POST /v1/notes/long"; body = Example.CreateNoteRequest, required = ["text"],
+        fields = (text = (minLength = 3,),),
+        query = [RouteDocs.param("page_size", Int; description = "Notes per page.", required = true)],
+        mcp = RouteDocs.tool("create_long_note"; title = "Write a long note", defaults = (page_size = 10,)))
+    tool = only(RouteDocs.mcp_tools([long]))
+    @test tool.input_schema["properties"]["text"]["minLength"] == 3
+    @test tool.input_schema["required"] == ["text"]
+
+    clash = scratch_endpoint("GET /v1/other-notes"; response = Other.Note, mcp = RouteDocs.excluded("Only for the web app."))
+    twin = scratch_endpoint("GET /v1/other_notes"; mcp = RouteDocs.excluded("Only for the web app."))
+    issues = RouteDocs.problems(; routes = Set([("GET", "/v1/other-notes"), ("GET", "/v1/other_notes"), ROUTES...]),
+                                widgets = WIDGETS, verbs = VERBS, endpoints = [RouteDocs.ENDPOINTS; clash; twin])
+    @test any(i -> startswith(i, "OpenAPI schema name Note would stand for more than one type"), issues)
+    @test "GET /v1/other_notes has the same OpenAPI operationId, get_v1_other_notes, as GET /v1/other-notes" in issues
+
+    maybe = scratch_endpoint("GET /v1/notes/maybe"; response = Union{Example.Note,Nothing}, mcp = RouteDocs.excluded("Only for the web app."))
+    @test isempty(RouteDocs.contract_problems(; bodies = [], query_params = [],
+        responses = [("GET", "/v1/notes/maybe", Nothing), ("GET", "/v1/notes/maybe", Example.Note)], endpoints = [maybe]))
 end
 
 @testset "reset!" begin

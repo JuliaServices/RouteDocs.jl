@@ -44,9 +44,9 @@ end
 
 "Whether `T` is a struct that JSON reads and writes as an object of its fields."
 is_object_struct(T) = T isa DataType && isstructtype(T) && !(T <: Number) &&
-    !(T <: AbstractString) && !(T <: AbstractArray) && !(T <: AbstractDict) &&
-    !(T <: Dates.TimeType) && !(T <: Enum) && T !== Nothing && !(T <: Tuple) &&
-    !(T <: NamedTuple) && T !== JSON.JSONText && T !== Symbol
+    !(T <: AbstractString) && !(T <: AbstractArray) && !(T <: AbstractSet) && !(T <: AbstractDict) &&
+    !(T <: Dates.TimeType) && !(T <: Enum) && T !== Nothing && T !== Missing && !(T <: Tuple) &&
+    !(T <: NamedTuple) && T !== JSON.JSONText && T !== Symbol && T !== Base.UUID
 
 nonnothing(T) = T isa Union ? Base.typesplit(T, Nothing) : T
 
@@ -55,7 +55,9 @@ nonnothing(T) = T isa Union ? Base.typesplit(T, Nothing) : T
 
 The JSON Schema of a value of Julia type `T` as JSON.jl reads and writes it.
 Struct fields become object properties, under their field names, described by
-their field docstrings; a field without a default is required. `Union{T,Nothing}` accepts `null`. With a
+their field docstrings; a field without a default is required. `Union{T,Nothing}` accepts `null`.
+A `DateTime` is documented as `format: date-time`, which includes a time zone
+offset, so serialize it with one (JSON.jl writes none by default). With a
 `refs` dictionary, named structs are emitted once under `refs` and referenced as
 `#/components/schemas/Name` (for OpenAPI); without one they are written inline
 (for MCP tool arguments, which many hosts cannot resolve references in).
@@ -63,7 +65,7 @@ their field docstrings; a field without a default is required. `Union{T,Nothing}
 function schema(@nospecialize(T); refs::Union{Nothing,Dict{String,Any}} = nothing,
                 docs::Bool = true, stack::Vector{Any} = Any[])
     T === Any && return Dict{String,Any}()
-    T === Nothing && return Dict{String,Any}("type" => "null")
+    (T === Nothing || T === Missing) && return Dict{String,Any}("type" => "null")
     if T isa Union
         inner = nonnothing(T)
         inner isa Union && return Dict{String,Any}("anyOf" => [schema(t; refs, docs, stack) for t in Base.uniontypes(T)])
@@ -73,6 +75,7 @@ function schema(@nospecialize(T); refs::Union{Nothing,Dict{String,Any}} = nothin
     T isa UnionAll && return Dict{String,Any}()
     T <: AbstractString && return Dict{String,Any}("type" => "string")
     T === Symbol && return Dict{String,Any}("type" => "string")
+    T === Base.UUID && return Dict{String,Any}("type" => "string", "format" => "uuid")
     T === Bool && return Dict{String,Any}("type" => "boolean")
     T <: Integer && return Dict{String,Any}("type" => "integer")
     T <: Real && return Dict{String,Any}("type" => "number")
@@ -100,7 +103,9 @@ function schema(@nospecialize(T); refs::Union{Nothing,Dict{String,Any}} = nothin
         return Dict{String,Any}("type" => "object", "properties" => props, "required" => [String(n) for n in fieldnames(T)])
     end
     if T <: Tuple
-        return Dict{String,Any}("type" => "array", "prefixItems" => [schema(t; refs, docs, stack) for t in fieldtypes(T)])
+        n = fieldcount(T)
+        return Dict{String,Any}("type" => "array", "prefixItems" => [schema(t; refs, docs, stack) for t in fieldtypes(T)],
+                                "minItems" => n, "maxItems" => n)
     end
     is_object_struct(T) || throw(ArgumentError("no JSON Schema mapping for $(T)"))
     if refs !== nothing
@@ -187,7 +192,8 @@ such as `{ name: string; starts_at?: string | null }`.
 function shape_text(@nospecialize(T); depth::Int = 0)
     depth > 3 && return "object"
     T === Any && return "unknown"
-    T === Nothing && return "null"
+    (T === Nothing || T === Missing) && return "null"
+    T === Base.UUID && return "string"
     if T isa Union
         members = sort(Base.uniontypes(T); by = t -> t === Nothing)  # null last
         return join(unique([shape_text(t; depth) for t in members]), " | ")
@@ -243,6 +249,7 @@ function example_value(s::Dict{String,Any}; refs = nothing, depth::Int = 0)
     t == "integer" && return 0
     t == "number" && return 0
     t == "boolean" && return false
+    t == "array" && haskey(s, "prefixItems") && return Any[example_value(p; refs, depth = depth + 1) for p in s["prefixItems"]]
     t == "array" && return depth > 3 ? Any[] : Any[example_value(get(s, "items", Dict{String,Any}()); refs, depth = depth + 1)]
     if t == "object"
         out = Dict{String,Any}()

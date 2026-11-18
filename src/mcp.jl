@@ -43,8 +43,9 @@ function tool_arguments(e::Endpoint; auto_key_note::AbstractString = "")
     end
     for p in e.query
         s = param_schema(p)
-        haskey(t.defaults, p.name) && (s["default"] = t.defaults[p.name])
-        push!(args, ToolArgument(p.name, :query, p.name, p.required, s))
+        defaulted = haskey(t.defaults, p.name)
+        defaulted && (s["default"] = t.defaults[p.name])
+        push!(args, ToolArgument(p.name, :query, p.name, p.required && !defaulted, s))
     end
     whole_body = !is_object_struct(something(e.body, Nothing))
     for (field, s, required) in body_fields(e)
@@ -73,26 +74,34 @@ end
     body_fields(e) -> Vector{Tuple{String,Dict{String,Any},Bool}}
 
 Each documented body field of `e` as `(name, schema, required)`, with the
-endpoint's `fields` keywords merged into its schema.
+endpoint's `fields` keywords merged into its schema. A body that is not an
+object is one field named `body`.
 """
 function body_fields(e::Endpoint)
     e.body === nothing && return Tuple{String,Dict{String,Any},Bool}[]
     T = e.body
-    is_object_struct(T) || return [("body", schema(T), e.body_required)]
+    is_object_struct(T) || return [("body", with_fields(schema(T), get(e.fields, "body", nothing)), e.body_required)]
     s = schema(T)
     required = Set{String}(get(s, "required", String[]))
     union!(required, e.required)
     out = Tuple{String,Dict{String,Any},Bool}[]
     for name in json_fields(T)
-        prop = copy(s["properties"][name])
-        for (k, v) in get(e.fields, name, Dict{String,Any}())
-            prop[k] = v isa Tuple ? collect(v) : v
-        end
+        prop = with_fields(s["properties"][name], get(e.fields, name, nothing))
         # A required field's default only fills in a value the server rejects,
         # and a null default just means "left out", so neither helps a caller.
         (name in required || get(prop, "default", missing) === nothing) && delete!(prop, "default")
-        name in required && get(prop, "type", nothing) == "string" && (prop["minLength"] = 1)
+        name in required && get(prop, "type", nothing) == "string" && get!(prop, "minLength", 1)
         push!(out, (name, prop, name in required))
+    end
+    return out
+end
+
+"A copy of schema `s` with an endpoint's `fields` keywords for it, if any."
+function with_fields(s::Dict{String,Any}, extra)
+    out = copy(s)
+    extra === nothing && return out
+    for (k, v) in extra
+        out[k] = v isa Tuple ? collect(v) : v
     end
     return out
 end

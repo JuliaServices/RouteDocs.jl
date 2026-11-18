@@ -13,6 +13,8 @@ diff cleanly. `properties` of an object schema keep `property_order` when given.
 """
 function ordered(@nospecialize(x); property_order::Union{Nothing,Vector{String}} = nothing)
     x isa JSON.Object && return x  # already ordered
+    x isa AbstractDict && !(keytype(x) <: AbstractString) &&
+        return ordered(Dict{String,Any}(string(k) => v for (k, v) in x); property_order)
     if x isa AbstractDict
         keys_sorted = sort!(String[String(k) for k in keys(x)]; by = k -> (something(findfirst(==(k), KEY_ORDER), length(KEY_ORDER) + 1), k))
         out = JSON.Object{String,Any}()
@@ -100,11 +102,15 @@ function openapi(endpoints::Vector{Endpoint} = ENDPOINTS; title::AbstractString,
             if !isempty(e.required) || !isempty(e.fields)
                 # Endpoint-level rules refine the shared struct schema for this operation.
                 inline = schema(e.body)
-                req = Set{String}(get(inline, "required", String[]))
-                union!(req, e.required)
-                isempty(req) || (inline["required"] = sort!(collect(req)))
-                for (name, extra) in e.fields
-                    merge!(inline["properties"][name], Dict{String,Any}(k => (v isa Tuple ? collect(v) : v) for (k, v) in extra))
+                if is_object_struct(e.body)
+                    req = Set{String}(get(inline, "required", String[]))
+                    union!(req, e.required)
+                    isempty(req) || (inline["required"] = sort!(collect(req)))
+                    for (name, extra) in e.fields
+                        inline["properties"][name] = with_fields(inline["properties"][name], extra)
+                    end
+                else
+                    inline = with_fields(inline, get(e.fields, "body", nothing))
                 end
                 body_schema = inline
             end

@@ -41,6 +41,17 @@ function problems(; routes::Set{Tuple{String,String}}, widgets::Set{Symbol} = Se
         isempty(e.summary) && push!(out, "$(where_) needs a summary")
         e.audience === :official && append!(out, official_problems(e, where_, widgets, verbs))
     end
+    ids = Dict{String,String}()
+    for e in endpoints
+        e.audience === :official || continue
+        id = operation_id(e)
+        haskey(ids, id) && push!(out, "$(e.method) $(e.path) has the same OpenAPI operationId, $(id), as $(ids[id])")
+        ids[id] = "$(e.method) $(e.path)"
+    end
+    for (name, types) in sort!(collect(schema_names(endpoints)); by = first)
+        length(types) > 1 && push!(out, "OpenAPI schema name $(name) would stand for more than one type: " *
+            join(sort!(string.(collect(types))), ", ") * "; rename all but one")
+    end
     for route in sort!(collect(routes))
         haskey(seen, route) || push!(out, "$(route[1]) $(route[2]) is registered but not documented")
     end
@@ -81,6 +92,11 @@ function official_problems(e::Endpoint, where_::String, widgets::Set{Symbol}, ve
     end
     for p in e.query
         isempty(p.description) && push!(out, "$(where_) query parameter $(p.name) needs a description")
+    end
+    if e.body !== nothing && !is_object_struct(e.body)
+        for name in keys(e.fields)
+            name == "body" || push!(out, "$(where_) adds schema keywords to $(name), but its body is not an object; use `body`")
+        end
     end
     if e.body !== nothing && is_object_struct(e.body)
         names = json_fields(e.body)
@@ -127,6 +143,37 @@ function official_problems(e::Endpoint, where_::String, widgets::Set{Symbol}, ve
         isempty(desc) && push!(out, "$(where_) tool argument $(a.name) has no description")
     end
     return out
+end
+
+"""
+The struct types each OpenAPI schema name would stand for, from the bodies and
+responses of official endpoints. A name is a struct's name without its module
+or type parameters, so two types that share one cannot both be documented.
+"""
+function schema_names(endpoints::Vector{Endpoint})
+    names = Dict{String,Set{Any}}()
+    seen = Set{Any}()
+    visit(@nospecialize(T)) = begin
+        T isa Union && return foreach(visit, Base.uniontypes(T))
+        (T isa DataType && !(T in seen)) || return
+        push!(seen, T)
+        if T <: AbstractVector || T <: AbstractSet
+            visit(eltype(T))
+        elseif T <: AbstractDict
+            visit(valtype(T))
+        elseif T <: Tuple || T <: NamedTuple
+            foreach(visit, fieldtypes(T))
+        elseif is_object_struct(T)
+            push!(get!(Set{Any}, names, string(nameof(T))), T)
+            foreach(visit, fieldtypes(T))
+        end
+    end
+    for e in endpoints
+        e.audience === :official || continue
+        e.body === nothing || visit(e.body)
+        e.response === nothing || visit(e.response)
+    end
+    return names
 end
 
 "Every parameter and body or response field name, so a backticked field is not mistaken for a tool."
@@ -191,14 +238,14 @@ function contract_problems(; bodies, responses, query_params,
         where_ = "$(method) $(e.path) ($(e.source))"
         if e.body === nothing
             push!(out, "$(where_) parses a $(T) body but documents none")
-        elseif e.body !== T && json_shape(e.body) != json_shape(T)
+        elseif e.body !== T && !(T <: e.body) && json_shape(e.body) != json_shape(T)
             push!(out, "$(where_) parses $(T) but documents body = $(e.body)")
         end
     end
     for (method, pattern, T) in responses
         e = get(by_route, (method, pattern), nothing)
         (e === nothing || e.response === nothing) && continue
-        e.response === T && continue
+        (e.response === T || T <: e.response) && continue
         json_shape(e.response) == json_shape(T) ||
             push!(out, "$(method) $(e.path) ($(e.source)) returns $(T) but documents response = $(e.response)")
     end
@@ -211,10 +258,15 @@ function contract_problems(; bodies, responses, query_params,
     return sort!(collect(out))
 end
 
-"The JSON shape of `T` without descriptions or defaults, for comparing two types."
+"""
+The JSON shape of `T` without descriptions or defaults, and with required
+fields in any order, for comparing two types.
+"""
 function json_shape(@nospecialize(T))
-    strip_docs(x) = x isa AbstractDict ?
-        Dict{String,Any}(k => strip_docs(v) for (k, v) in x if !(k in ("description", "default"))) :
-        x isa AbstractVector ? Any[strip_docs(v) for v in x] : x
-    return strip_docs(schema(T; docs = false))
+    shape(x) = x isa AbstractDict ? Dict{String,Any}(
+            k => (k == "properties" ? Dict{String,Any}(name => shape(p) for (name, p) in v) :
+                  k == "required" ? sort(v) : shape(v))
+            for (k, v) in x if !(k in ("description", "default"))) :
+        x isa AbstractVector ? Any[shape(v) for v in x] : x
+    return shape(schema(T; docs = false))
 end

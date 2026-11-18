@@ -170,7 +170,8 @@ Keywords:
 - `required`: body fields the handler rejects when missing or blank, beyond the
   fields that have no default.
 - `fields`: JSON Schema keywords added to a body field, for example
-  `(status = (enum = ["open", "closed"],),)`.
+  `(status = (enum = ["open", "closed"],),)`. For a body that is not an object,
+  such as a list, `body = (...)` adds them to the whole body.
 - `response`: the Julia type serialized as the response, when there is one.
 - `status`: the success status (200, 201, or 204).
 - `content_type`: the success media type when it is not JSON.
@@ -264,4 +265,4 @@ function strip_text(text::AbstractString)
 end
 
 "The `{name}` segments of a documented path, in order."
-path_param_names(path::AbstractString) = [String(m.captures[1]) for m in eachmatch(r"\{([a-z_]+)\}", path)]
+path_param_names(path::AbstractString) = [String(m.captures[1]) for m in eachmatch(r"\{([A-Za-z_][A-Za-z0-9_]*)\}", path)]
