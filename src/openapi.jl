@@ -102,10 +102,10 @@ function openapi(endpoints::Vector{Endpoint} = ENDPOINTS; title::AbstractString,
             if !isempty(e.required) || !isempty(e.fields)
                 # Endpoint-level rules refine the shared struct schema for this operation.
                 inline = schema(e.body)
+                req = Set{String}(get(inline, "required", String[]))
+                union!(req, e.required)
+                isempty(req) || (inline["required"] = sort!(collect(req)))
                 if is_object_struct(e.body)
-                    req = Set{String}(get(inline, "required", String[]))
-                    union!(req, e.required)
-                    isempty(req) || (inline["required"] = sort!(collect(req)))
                     for (name, extra) in e.fields
                         inline["properties"][name] = with_fields(inline["properties"][name], extra)
                     end

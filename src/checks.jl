@@ -238,15 +238,14 @@ function contract_problems(; bodies, responses, query_params,
         where_ = "$(method) $(e.path) ($(e.source))"
         if e.body === nothing
             push!(out, "$(where_) parses a $(T) body but documents none")
-        elseif e.body !== T && !(T <: e.body) && json_shape(e.body) != json_shape(T)
+        elseif !admits(e.body, T)
             push!(out, "$(where_) parses $(T) but documents body = $(e.body)")
         end
     end
     for (method, pattern, T) in responses
         e = get(by_route, (method, pattern), nothing)
         (e === nothing || e.response === nothing) && continue
-        (e.response === T || T <: e.response) && continue
-        json_shape(e.response) == json_shape(T) ||
+        admits(e.response, T) ||
             push!(out, "$(method) $(e.path) ($(e.source)) returns $(T) but documents response = $(e.response)")
     end
     for (method, pattern, name) in query_params
@@ -257,6 +256,13 @@ function contract_problems(; bodies, responses, query_params,
     end
     return sort!(collect(out))
 end
+
+"""
+Whether a value of type `T` matches documented type `D` in JSON: the same type,
+the same JSON shape, or one member of a documented union.
+"""
+admits(@nospecialize(D), @nospecialize(T)) = D === T || json_shape(D) == json_shape(T) ||
+    (D isa Union && any(m -> m === T || json_shape(m) == json_shape(T), Base.uniontypes(D)))
 
 """
 The JSON shape of `T` without descriptions or defaults, and with required

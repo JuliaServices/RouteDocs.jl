@@ -149,6 +149,7 @@ end
 "A schema that also accepts JSON `null`."
 function nullable(s::Dict{String,Any})
     t = get(s, "type", nothing)
+    t == "null" && return s
     if t isa String && !haskey(s, "\$ref")
         out = copy(s)
         out["type"] = [t, "null"]

@@ -218,6 +218,15 @@ end
     @test any(i -> startswith(i, "OpenAPI schema name Note would stand for more than one type"), issues)
     @test "GET /v1/other_notes has the same OpenAPI operationId, get_v1_other_notes, as GET /v1/other-notes" in issues
 
+    @test RouteDocs.schema(Union{Nothing,Missing}) == Dict("type" => "null")
+    count_only = scratch_endpoint("GET /v1/notes/count"; response = Integer, mcp = RouteDocs.excluded("Only for the web app."))
+    @test length(RouteDocs.contract_problems(; bodies = [], query_params = [],
+        responses = [("GET", "/v1/notes/count", Bool)], endpoints = [count_only])) == 1
+    named = scratch_endpoint("POST /v1/notes/named"; body = Dict{String,String}, required = ["name"],
+        mcp = RouteDocs.excluded("Only for the web app."))
+    doc = RouteDocs.openapi([named]; title = "Notes API", version = "1")
+    @test doc["paths"]["/v1/notes/named"]["post"]["requestBody"]["content"]["application/json"]["schema"]["required"] == ["name"]
+
     maybe = scratch_endpoint("GET /v1/notes/maybe"; response = Union{Example.Note,Nothing}, mcp = RouteDocs.excluded("Only for the web app."))
     @test isempty(RouteDocs.contract_problems(; bodies = [], query_params = [],
         responses = [("GET", "/v1/notes/maybe", Nothing), ("GET", "/v1/notes/maybe", Example.Note)], endpoints = [maybe]))
