@@ -191,6 +191,10 @@ end
     @test RouteDocs.ordered(Dict(:count => 1, :name => "a")) == Dict("count" => 1, "name" => "a")
     @test RouteDocs.schema(Base.UUID) == Dict("type" => "string", "format" => "uuid")
     @test Base.UUID(RouteDocs.example_value(RouteDocs.schema(Base.UUID))) isa Base.UUID
+    # every example parses back into its type, including a Time, whose schema has a pattern
+    for T in (Time, Date, DateTime, Base.UUID, Union{Nothing,Time})
+        @test JSON.parse(JSON.json(RouteDocs.example_value(RouteDocs.schema(T))), T) isa T
+    end
     @test Set(s["type"] for s in RouteDocs.schema(Union{Int,Missing})["anyOf"]) == Set(["integer", "null"])
     pair = RouteDocs.schema(Tuple{Int,String})
     @test pair["minItems"] == 2 && pair["maxItems"] == 2

@@ -82,7 +82,8 @@ function schema(@nospecialize(T); refs::Union{Nothing,Dict{String,Any}} = nothin
     T <: Real && return Dict{String,Any}("type" => "number")
     T === Date && return Dict{String,Any}("type" => "string", "format" => "date")
     T === DateTime && return Dict{String,Any}("type" => "string", "format" => "date-time")
-    T === Time && return Dict{String,Any}("type" => "string", "pattern" => "^\\d{2}:\\d{2}(:\\d{2})?\$")
+    T === Time && return Dict{String,Any}("type" => "string", "pattern" => "^\\d{2}:\\d{2}(:\\d{2})?\$",
+                                          "examples" => Any["18:30:00"])
     T <: Enum && return Dict{String,Any}("type" => "string", "enum" => [string(x) for x in instances(T)])
     T === JSON.JSONText && return Dict{String,Any}()
     if T <: AbstractVector
